@@ -4,6 +4,7 @@ from flask_restful import Api, Resource  # used for REST API building
 from datetime import datetime
 from __init__ import app
 from api.jwt_authorize import token_required
+from api.subscription import requires_feature
 from model.feedback import Feedback
 
 """
@@ -32,13 +33,14 @@ class FeedbackAPI:
     """
     class _CRUD(Resource):
         @token_required()
+        @requires_feature('incident_report')
         def post(self):
             # Obtain the current user from the token required setting in the global context
             current_user = g.current_user
             # Obtain the request data sent by the RESTful client API
             data = request.get_json()
             # Create a new feedback object using the data from the request
-            feedback = feedback(data['content'], data['post_id'], current_user.id)
+            feedback = Feedback(data['content'], data['post_id'], current_user.id)
             # Save the feedback object using the Object Relational Mapper (ORM) method defined in the model
             feedback.create()
             # Return response to the client in JSON format, converting Python dictionaries to JSON format

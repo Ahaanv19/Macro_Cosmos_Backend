@@ -52,6 +52,55 @@ ZELLE_INFO = {
     'email': 'ahaanvk@gmail.com'
 }
 
+# Feature access configuration
+# Each feature specifies which tiers can access it and any limits
+FEATURE_ACCESS = {
+    'daily_routine': {
+        'name': 'Daily Routine',
+        'description': 'Save and manage daily commute routines',
+        'allowed_tiers': ['plus', 'pro', 'admin'],
+        'limits': {
+            'free': 0,
+            'plus': -1,  # unlimited
+            'pro': -1,
+            'admin': -1
+        }
+    },
+    'favorite_locations': {
+        'name': 'Favorite Locations',
+        'description': 'Save frequently visited locations',
+        'allowed_tiers': ['plus', 'pro', 'admin'],
+        'limits': {
+            'free': 0,
+            'plus': 10,  # max 10 locations
+            'pro': -1,   # unlimited
+            'admin': -1
+        }
+    },
+    'incident_report': {
+        'name': 'Incident Report',
+        'description': 'Report and track traffic incidents',
+        'allowed_tiers': ['plus', 'pro', 'admin'],
+        'limits': {
+            'free': 0,
+            'plus': -1,
+            'pro': -1,
+            'admin': -1
+        }
+    },
+    'route_calculation': {
+        'name': 'Route Calculation',
+        'description': 'Calculate optimal routes',
+        'allowed_tiers': ['free', 'plus', 'pro', 'admin'],
+        'limits': {
+            'free': 4,    # 4 per day
+            'plus': 50,   # 50 per day
+            'pro': -1,    # unlimited
+            'admin': -1
+        }
+    }
+}
+
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -149,6 +198,120 @@ def require_admin():
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+
+def requires_feature(feature_name):
+    """
+    Decorator to require access to a specific premium feature.
+    
+    Usage:
+        @token_required()
+        @requires_feature('daily_routine')
+        def my_routine_endpoint():
+            # Only Plus, Pro, or Admin users can access
+            pass
+    
+    Args:
+        feature_name (str): The feature key from FEATURE_ACCESS config
+        
+    Returns:
+        403 if user doesn't have access to the feature
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            user = g.current_user
+            tier = get_user_tier(user)
+            
+            # Check if feature exists
+            if feature_name not in FEATURE_ACCESS:
+                return jsonify({'error': f'Unknown feature: {feature_name}'}), 500
+            
+            feature = FEATURE_ACCESS[feature_name]
+            allowed_tiers = feature.get('allowed_tiers', [])
+            
+            # Check if user's tier is allowed
+            if tier not in allowed_tiers:
+                return jsonify({
+                    'error': 'Premium feature',
+                    'message': f'{feature["name"]} requires a premium subscription',
+                    'feature': feature_name,
+                    'feature_name': feature['name'],
+                    'current_tier': tier,
+                    'required_tier': 'plus',
+                    'upgrade_url': '/subscription'
+                }), 403
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def check_feature_access(user, feature_name):
+    """
+    Utility function to check if a user has access to a feature.
+    
+    Args:
+        user: User object
+        feature_name (str): The feature key from FEATURE_ACCESS config
+        
+    Returns:
+        dict: { allowed: bool, tier: str, feature: dict, message: str }
+    """
+    tier = get_user_tier(user)
+    
+    if feature_name not in FEATURE_ACCESS:
+        return {
+            'allowed': False,
+            'tier': tier,
+            'feature': None,
+            'message': f'Unknown feature: {feature_name}'
+        }
+    
+    feature = FEATURE_ACCESS[feature_name]
+    allowed_tiers = feature.get('allowed_tiers', [])
+    limit = feature.get('limits', {}).get(tier, 0)
+    
+    allowed = tier in allowed_tiers
+    
+    if allowed:
+        message = f'You have access to {feature["name"]}'
+        if limit > 0:
+            message += f' (limit: {limit})'
+        elif limit == -1:
+            message += ' (unlimited)'
+    else:
+        message = f'{feature["name"]} requires Plus or Pro subscription'
+    
+    return {
+        'allowed': allowed,
+        'tier': tier,
+        'feature': {
+            'name': feature['name'],
+            'description': feature['description'],
+            'limit': limit
+        },
+        'message': message
+    }
+
+
+def get_feature_limit(user, feature_name):
+    """
+    Get the limit for a specific feature for a user.
+    
+    Args:
+        user: User object
+        feature_name (str): The feature key
+        
+    Returns:
+        int: The limit (-1 for unlimited, 0 for no access)
+    """
+    tier = get_user_tier(user)
+    
+    if feature_name not in FEATURE_ACCESS:
+        return 0
+    
+    return FEATURE_ACCESS[feature_name].get('limits', {}).get(tier, 0)
 
 
 def require_route_available(auto_increment=True):
@@ -659,6 +822,79 @@ class RouteUsageIncrement(Resource):
             'limit': limit,
             'remaining': remaining,
             'unlimited': limit == -1
+        }
+
+
+class CheckFeatureAccess(Resource):
+    """
+    Check if current user has access to a specific premium feature.
+    
+    GET /api/subscription/check-feature/<feature_name>
+    
+    Features:
+        - daily_routine: Save and manage daily commute routines
+        - favorite_locations: Save frequently visited locations  
+        - incident_report: Report and track traffic incidents
+        - route_calculation: Calculate optimal routes
+    
+    Returns:
+        {
+            "allowed": true/false,
+            "tier": "free" | "plus" | "pro" | "admin",
+            "feature": {
+                "name": "Daily Routine",
+                "description": "Save and manage daily commute routines",
+                "limit": -1  // -1 = unlimited, 0 = no access, >0 = limited
+            },
+            "message": "You have access to Daily Routine"
+        }
+    
+    Feature Access Matrix:
+        | Feature           | Free | Plus    | Pro | Admin |
+        |-------------------|------|---------|-----|-------|
+        | Route Calculation | 4/day| 50/day  | ∞   | ∞     |
+        | Daily Routine     | ❌   | ✅      | ✅  | ✅    |
+        | Favorite Locations| ❌   | ✅ (10) | ✅  | ✅    |
+        | Incident Report   | ❌   | ✅      | ✅  | ✅    |
+    """
+    
+    @token_required()
+    def get(self, feature_name):
+        user = g.current_user
+        result = check_feature_access(user, feature_name)
+        return result
+
+
+class ListAllFeatures(Resource):
+    """
+    List all available features and user's access status.
+    
+    GET /api/subscription/features
+    
+    Returns all features with user's current access status.
+    """
+    
+    @token_required()
+    def get(self):
+        user = g.current_user
+        tier = get_user_tier(user)
+        
+        features = {}
+        for feature_key, feature_config in FEATURE_ACCESS.items():
+            allowed_tiers = feature_config.get('allowed_tiers', [])
+            limit = feature_config.get('limits', {}).get(tier, 0)
+            
+            features[feature_key] = {
+                'name': feature_config['name'],
+                'description': feature_config['description'],
+                'allowed': tier in allowed_tiers,
+                'limit': limit,
+                'unlimited': limit == -1
+            }
+        
+        return {
+            'tier': tier,
+            'features': features
         }
 
 
@@ -1245,6 +1481,8 @@ api.add_resource(CancelSubscription, '/subscription/cancel')
 api.add_resource(PaymentHistoryEndpoint, '/subscription/history')
 api.add_resource(RouteUsageStatus, '/subscription/route-usage')
 api.add_resource(RouteUsageIncrement, '/subscription/route-usage/increment')
+api.add_resource(CheckFeatureAccess, '/subscription/check-feature/<string:feature_name>')
+api.add_resource(ListAllFeatures, '/subscription/features')
 
 # Admin endpoints
 api.add_resource(AdminPendingRequests, '/admin/subscriptions/pending')
