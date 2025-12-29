@@ -35,6 +35,10 @@ class Subscription(db.Model):
     _updated_at = db.Column('updated_at', db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     _expires_at = db.Column('expires_at', db.DateTime)  # When subscription expires
     
+    # Stripe fields
+    _stripe_customer_id = db.Column('stripe_customer_id', db.String(100))
+    _stripe_subscription_id = db.Column('stripe_subscription_id', db.String(100))
+    
     def __init__(self, user_id, tier='free', status='active', billing_interval=None):
         """
         Constructor for Subscription.
@@ -91,6 +95,22 @@ class Subscription(db.Model):
         self._expires_at = value
     
     @property
+    def stripe_customer_id(self):
+        return self._stripe_customer_id
+    
+    @stripe_customer_id.setter
+    def stripe_customer_id(self, value):
+        self._stripe_customer_id = value
+    
+    @property
+    def stripe_subscription_id(self):
+        return self._stripe_subscription_id
+    
+    @stripe_subscription_id.setter
+    def stripe_subscription_id(self, value):
+        self._stripe_subscription_id = value
+    
+    @property
     def created_at(self):
         return self._created_at
     
@@ -116,7 +136,9 @@ class Subscription(db.Model):
             'billing_interval': self._billing_interval,
             'expires_at': self._expires_at.isoformat() if self._expires_at else None,
             'created_at': self._created_at.isoformat() if self._created_at else None,
-            'updated_at': self._updated_at.isoformat() if self._updated_at else None
+            'updated_at': self._updated_at.isoformat() if self._updated_at else None,
+            'stripe_customer_id': self._stripe_customer_id,
+            'stripe_subscription_id': self._stripe_subscription_id
         }
     
     def create(self):
@@ -303,6 +325,10 @@ class PaymentHistory(db.Model):
     _description = db.Column('description', db.String(200))
     _payment_method = db.Column('payment_method', db.String(50), default='zelle')
     
+    # Stripe fields
+    _stripe_payment_intent_id = db.Column('stripe_payment_intent_id', db.String(100))
+    _stripe_invoice_id = db.Column('stripe_invoice_id', db.String(100))
+    
     _created_at = db.Column('created_at', db.DateTime, default=datetime.utcnow)
     
     def __init__(self, user_id, amount, status, description, payment_method='zelle'):
@@ -365,6 +391,22 @@ class PaymentHistory(db.Model):
         return self._payment_method
     
     @property
+    def stripe_payment_intent_id(self):
+        return self._stripe_payment_intent_id
+    
+    @stripe_payment_intent_id.setter
+    def stripe_payment_intent_id(self, value):
+        self._stripe_payment_intent_id = value
+    
+    @property
+    def stripe_invoice_id(self):
+        return self._stripe_invoice_id
+    
+    @stripe_invoice_id.setter
+    def stripe_invoice_id(self, value):
+        self._stripe_invoice_id = value
+    
+    @property
     def created_at(self):
         return self._created_at
     
@@ -380,7 +422,9 @@ class PaymentHistory(db.Model):
             'amount_dollars': self._amount / 100 if self._amount else 0,
             'status': self._status,
             'description': self._description,
-            'payment_method': self._payment_method
+            'payment_method': self._payment_method,
+            'stripe_payment_intent_id': self._stripe_payment_intent_id,
+            'stripe_invoice_id': self._stripe_invoice_id
         }
     
     def create(self):
