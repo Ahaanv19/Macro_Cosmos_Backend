@@ -1,7 +1,7 @@
 
-# 🚗 Poway Auto Backend
+# 🚗 SD Auto Backend
 
-The **Poway Auto Backend** is the server-side system behind Poway Auto — a full-stack platform built to improve routing and traffic efficiency in the City of Poway.
+The **SD Auto Backend** is the server-side system behind SD Auto — a full-stack platform built to improve routing and traffic efficiency in the City of Poway.
 
 This backend handles routing logic, traffic data processing, and communication with the frontend and external APIs.
 
@@ -13,7 +13,7 @@ This backend handles routing logic, traffic data processing, and communication w
    The frontend sends route requests, hazard reports, or user actions to the backend using HTTP endpoints.
 
 2. **Processes Real-Time Traffic Data**  
-   The backend connects with Google Maps and Poway’s open datasets to calculate accurate and optimized routes.
+   The backend connects with Google Maps and San Diego’s open datasets to calculate accurate and optimized routes.
 
 3. **Returns Optimized Routes or Data**  
    Based on traffic conditions, user routines, or hazard locations, it returns optimized routing instructions or relevant data.
