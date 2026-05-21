@@ -37,7 +37,7 @@ class TrafficData:
     }
 
     def __init__(self):
-        csv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data', 'traffic_counts_datasd.csv'))
+        csv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'traffic_counts_datasd.csv'))
         self.traffic_df = self._load_data(csv_path)
         self._build_street_index()
 
