@@ -165,7 +165,12 @@ class RoutesAPI:
                         'traffic_analysis': {
                             'multiplier': traffic_adjustment['multiplier'],
                             'confidence': traffic_adjustment['confidence'],
-                            'streets_analyzed': traffic_adjustment['streets_matched']
+                            'streets_analyzed': traffic_adjustment['streets_matched'],
+                            # Breakdown of which dataset each matched street came
+                            # from: city = measured counts, county = speed-based
+                            # estimate (extends coverage to the whole county).
+                            'city_streets_matched': traffic_adjustment.get('city_matches', 0),
+                            'county_streets_matched': traffic_adjustment.get('county_matches', 0)
                         }
                     }
                     
