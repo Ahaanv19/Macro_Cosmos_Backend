@@ -15,6 +15,8 @@ import logging
 
 # import "objects" from "this" project
 from __init__ import app, db, login_manager
+# Security helpers: RBAC, IP allowlist, audit logging, rate limiting
+from utils.security import admin_required, ip_allowlist, audit, limiter
 # API endpoints
 from api.user import user_api 
 from api.pfp import pfp_api
@@ -103,17 +105,21 @@ def is_safe_url(target):
     return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])  # throttle brute-force attempts
 def login():
     error = None
     next_page = request.args.get('next', '') or request.form.get('next', '')
     if request.method == 'POST':
-        user = User.query.filter_by(_uid=request.form['username']).first()
-        if user and user.is_password(request.form['password']):
+        username = request.form.get('username', '')
+        user = User.query.filter_by(_uid=username).first()
+        if user and user.is_password(request.form.get('password', '')):
             login_user(user)
+            audit("login_success", username=username)
             if not is_safe_url(next_page):
                 return abort(400)
             return redirect(next_page or url_for('index'))
         else:
+            audit("login_failure", username=username)
             error = 'Invalid username or password.'
     return render_template("login.html", error=error, next=next_page)
     
@@ -133,12 +139,16 @@ def index():
 
 @app.route('/users/table')
 @login_required
+@admin_required
+@ip_allowlist()
 def utable():
     users = User.query.all()
     return render_template("utable.html", user_data=users)
 
 @app.route('/users/table2')
 @login_required
+@admin_required
+@ip_allowlist()
 def u2table():
     users = User.query.all()
     return render_template("u2table.html", user_data=users)
@@ -150,26 +160,30 @@ def uploaded_file(filename):
  
 @app.route('/users/delete/<int:user_id>', methods=['DELETE'])
 @login_required
+@admin_required
+@ip_allowlist()
 def delete_user(user_id):
     user = User.query.get(user_id)
     if user:
         user.delete()
+        audit("user_deleted", target_user_id=user_id)
         return jsonify({'message': 'User deleted successfully'}), 200
     return jsonify({'error': 'User not found'}), 404
 
 @app.route('/users/reset_password/<int:user_id>', methods=['POST'])
 @login_required
+@admin_required
+@ip_allowlist()
 def reset_password(user_id):
-    if current_user.role != 'Admin':
-        return jsonify({'error': 'Unauthorized'}), 403
-    
     user = User.query.get(user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
     # Set the new password
     if user.update({"password": app.config['DEFAULT_PASSWORD']}):
+        audit("password_reset", target_user_id=user_id)
         return jsonify({'message': 'Password reset successfully'}), 200
+    audit("password_reset_failed", target_user_id=user_id)
     return jsonify({'error': 'Password reset failed'}), 500
 
 # Create an AppGroup for custom commands

@@ -1,3 +1,4 @@
+import os
 from flask import Blueprint, request, g
 from flask_restful import Api, Resource
 import requests
@@ -10,8 +11,9 @@ from model.subscription import RouteUsage
 routes_api = Blueprint('routes', __name__, url_prefix='')
 api = Api(routes_api)
 
-# Replace with your actual API key
-API_KEY = 'AIzaSyC0qOeOkWMCMxT0bMAdpQzZesBsZ-zaFOM'
+# Google Maps API key is loaded from the environment (see .env / .env.example).
+# Never hardcode credentials in source.
+API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
 
 
 def get_user_tier(user):
@@ -80,23 +82,42 @@ class RoutesAPI:
                         'upgrade_url': '/subscription'
                     }, 429
                 
-                data = request.get_json()
+                if not API_KEY:
+                    return {'error': 'Routing service is not configured'}, 503
+
+                data = request.get_json(silent=True) or {}
                 origin = data.get('origin')
                 destination = data.get('destination')
                 mode = data.get('mode', 'driving')
                 include_traffic_details = data.get('include_traffic_details', False)
 
+                # Request validation at the edge: types, lengths, allowed values.
+                if not isinstance(origin, str) or not isinstance(destination, str):
+                    return {'error': 'Origin and destination are required'}, 400
+                origin = origin.strip()
+                destination = destination.strip()
                 if not origin or not destination:
                     return {'error': 'Origin and destination are required'}, 400
+                if len(origin) > 200 or len(destination) > 200:
+                    return {'error': 'Origin/destination too long'}, 400
+                if mode not in ('driving', 'walking', 'bicycling', 'transit'):
+                    return {'error': 'Invalid travel mode'}, 400
 
-                # Request to Google Directions API with traffic info
-                url = (
-                    f"https://maps.googleapis.com/maps/api/directions/json?"
-                    f"origin={origin}&destination={destination}&alternatives=true"
-                    f"&mode={mode}&departure_time=now&key={API_KEY}"
+                # Pass user input as request params (requests handles URL-encoding),
+                # which prevents query/parameter injection into the Google API call.
+                params = {
+                    'origin': origin,
+                    'destination': destination,
+                    'alternatives': 'true',
+                    'mode': mode,
+                    'departure_time': 'now',
+                    'key': API_KEY,
+                }
+                response = requests.get(
+                    "https://maps.googleapis.com/maps/api/directions/json",
+                    params=params,
+                    timeout=10,
                 )
-
-                response = requests.get(url)
                 directions_data = response.json()
 
                 # Handle Google API errors with appropriate status codes
@@ -193,9 +214,11 @@ class RoutesAPI:
 
             except Exception as e:
                 import traceback
+                # Log full detail server-side, return a generic message to clients
+                # so internal errors are not disclosed.
                 print(f"Route API Error: {str(e)}")
                 print(traceback.format_exc())
-                return {'error': str(e)}, 500
+                return {'error': 'Failed to calculate route'}, 500
 
 
     class _GetTrafficForStreet(Resource):

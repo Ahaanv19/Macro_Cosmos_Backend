@@ -19,3 +19,5 @@ python-dotenv
 boto3
 stripe
 geopy
+Flask-Limiter
+bleach

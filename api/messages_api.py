@@ -1,4 +1,5 @@
 # by P5 G1
+import os
 from flask import Blueprint, request, jsonify
 from flask_restful import Api, Resource
 import requests
@@ -11,8 +12,8 @@ api = Api(messages_api)
 # Path for the messages file
 MESSAGE_FILE_PATH = 'Period-5/aaak/messages.txt'
 
-# API Key and URL template for the trivia API
-API_KEY = 'LUDk78PjUOELr1cvaaQuEA==t3yAhXp37UD4j6P9'
+# API Key and URL template for the trivia API (key loaded from environment)
+API_KEY = os.environ.get('TRIVIA_API_KEY')
 TRIVIA_API_URL = 'https://api.api-ninjas.com/v1/trivia?category={}'
 
 class MessagesAPI:
