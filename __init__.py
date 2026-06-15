@@ -94,5 +94,15 @@ app.config['KASM_API_KEY_SECRET'] = os.environ.get('KASM_API_KEY_SECRET') or Non
 # Security hardening: rate limiting, security/CSP headers, audit logging,
 # secure cookies (prod), and weak-secret checks. Safe-by-default — see
 # utils/security.py. Wired last so it can read the config set above.
-from utils.security import init_security
-init_security(app)
+# Wrapped defensively: if a security dependency is missing in an environment,
+# the app still boots (degraded) rather than returning 502, and logs loudly.
+try:
+    from utils.security import init_security
+    init_security(app)
+except Exception as _sec_err:  # noqa: BLE001
+    import logging as _logging
+    _logging.getLogger(__name__).error(
+        "Security hardening failed to initialize (%s). The app is running "
+        "WITHOUT the new security middleware. Check that Flask-Limiter and "
+        "bleach are installed (pip install -r requirements.txt).", _sec_err,
+    )

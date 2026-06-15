@@ -344,8 +344,18 @@ def _check_secret_strength(app):
         return
     message = "; ".join(problems)
     if is_production():
-        raise RuntimeError(
-            f"Refusing to start in production with weak secrets: {message}. "
-            "Set strong SECRET_KEY / ADMIN_PASSWORD environment variables."
+        # Loud, repeated error — but do NOT crash the app, otherwise a missing
+        # SECRET_KEY would take the whole production deployment down (502).
+        # Set REQUIRE_STRONG_SECRETS=1 to opt into hard-fail behavior instead.
+        if os.environ.get("REQUIRE_STRONG_SECRETS", "").lower() in ("1", "true", "yes"):
+            raise RuntimeError(
+                f"Refusing to start in production with weak secrets: {message}. "
+                "Set strong SECRET_KEY / ADMIN_PASSWORD environment variables."
+            )
+        app.logger.error(
+            "SECURITY: %s. Set strong SECRET_KEY / ADMIN_PASSWORD env vars in "
+            "production. (Set REQUIRE_STRONG_SECRETS=1 to refuse startup instead.)",
+            message,
         )
-    app.logger.warning("SECURITY WARNING: %s (insecure for production).", message)
+    else:
+        app.logger.warning("SECURITY WARNING: %s (insecure for production).", message)

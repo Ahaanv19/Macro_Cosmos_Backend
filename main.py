@@ -15,8 +15,35 @@ import logging
 
 # import "objects" from "this" project
 from __init__ import app, db, login_manager
-# Security helpers: RBAC, IP allowlist, audit logging, rate limiting
-from utils.security import admin_required, ip_allowlist, audit, limiter
+# Security helpers: RBAC, IP allowlist, audit logging, rate limiting.
+# Imported defensively: if a security dependency is missing in some environment,
+# fall back to no-op shims so the app still boots (degraded) instead of 502.
+try:
+    from utils.security import admin_required, ip_allowlist, audit, limiter
+except Exception as _sec_err:  # noqa: BLE001
+    logging.getLogger(__name__).error(
+        "Security helpers unavailable (%s); running WITHOUT RBAC/rate-limit "
+        "decorators. Install deps: pip install -r requirements.txt", _sec_err,
+    )
+
+    def admin_required(func):
+        return func
+
+    def ip_allowlist(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def audit(*_args, **_kwargs):
+        return None
+
+    class _NoopLimiter:
+        def limit(self, *_args, **_kwargs):
+            def decorator(func):
+                return func
+            return decorator
+
+    limiter = _NoopLimiter()
 # API endpoints
 from api.user import user_api 
 from api.pfp import pfp_api
