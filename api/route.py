@@ -209,7 +209,7 @@ class RoutesAPI:
                 # Increment route usage count after successful route calculation
                 usage = RouteUsage.get_today_usage(user.id)
                 usage.increment()
-                
+
                 return route_info, 200
 
             except Exception as e:
