@@ -80,6 +80,7 @@ from model.nestPost import NestPost, initNestPosts
 from model.vote import Vote, initVotes
 from model.savedLocations import SavedLocations, initSavedLocations
 from model.subscription import Subscription, SubscriptionRequest, PaymentHistory, RouteUsage, initSubscriptions
+from model.business import BusinessSubmission, initBusinessSubmissions
 
 
 # server only View
@@ -264,6 +265,11 @@ def generate_data():
     except Exception as e:
         print(f"Error in initSubscriptions: {e}")
 
+    try:
+        initBusinessSubmissions()
+    except Exception as e:
+        print(f"Error in initBusinessSubmissions: {e}")
+
 # Backup the old database
 def backup_database(db_uri, backup_uri):
     """Backup the current database."""
@@ -333,7 +339,21 @@ def restore_data_command():
     
 # Register the custom command group with the Flask application
 app.cli.add_command(custom_cli)
-        
+
+# Startup: ensure the business_submissions table exists and load any previously
+# approved community submissions into the in-memory businesses list so they
+# survive restarts. Targeted + best-effort so it never blocks app startup.
+with app.app_context():
+    try:
+        BusinessSubmission.__table__.create(db.engine, checkfirst=True)
+    except Exception as e:
+        print(f"business_submissions table init: {e}")
+    try:
+        from api.businesses import load_approved_into_memory
+        load_approved_into_memory()
+    except Exception as e:
+        print(f"load_approved_into_memory at startup: {e}")
+
 # this runs the flask application on the development server
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=8888)
