@@ -1,7 +1,7 @@
 
-# 🚗 SD Auto Backend
+# 🚗 Macro Cosmos Backend
 
-The **SD Auto Backend** is the server-side system behind SD Auto — a full-stack platform built to improve routing and traffic efficiency in the City of Poway.
+The **Macro Cosmos Backend** is the server-side system behind Macro Cosmos — a full-stack platform built to improve routing and traffic efficiency in the City of Poway.
 
 This backend handles routing logic, traffic data processing, and communication with the frontend and external APIs.
 

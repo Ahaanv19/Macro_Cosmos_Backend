@@ -300,7 +300,7 @@ STRIPE_PRICES = {
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 
 # Frontend URLs - deployed and local
-FRONTEND_URL_DEPLOYED = os.environ.get('FRONTEND_URL', 'https://ahaanv19.github.io/SD_Auto_Frontend')
+FRONTEND_URL_DEPLOYED = os.environ.get('FRONTEND_URL', 'https://ahaanv19.github.io/Macro_Cosmos_Frontend')
 FRONTEND_URL_LOCAL = os.environ.get('FRONTEND_URL_LOCAL', 'http://localhost:4887')
 
 

@@ -1,5 +1,5 @@
 """
-Central security utilities for the SD Auto backend.
+Central security utilities for the Macro Cosmos backend.
 
 This module is intentionally *additive* and *safe-by-default*: every protection
 here is designed so that, when its configuration is absent, the application keeps
