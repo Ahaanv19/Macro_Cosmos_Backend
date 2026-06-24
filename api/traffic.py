@@ -55,6 +55,25 @@ class TrafficData:
         (0,  'very_low'),   # < 25 mph: residential / local streets
     ]
 
+    # State highways (Caltrans AADT) carry far higher volumes than surface
+    # streets — a freeway at 180k vehicles/day is normal flow, not gridlock — so
+    # they get their own (higher) thresholds and a GENTLER multiplier set. These
+    # are upper bounds on average daily volume per route.
+    FREEWAY_AADT_THRESHOLDS = {
+        'very_low': 20000,
+        'low': 60000,
+        'moderate': 120000,
+        'high': 200000,
+        'very_high': float('inf'),
+    }
+    FREEWAY_MULTIPLIERS = {
+        'very_low': 0.95,   # light state route
+        'low': 0.97,
+        'moderate': 1.00,   # baseline
+        'high': 1.08,       # busy freeway
+        'very_high': 1.15,  # heaviest freeways (I-5 / I-805 / I-15)
+    }
+
     def __init__(self):
         data_dir = os.path.join(os.path.dirname(__file__), 'data')
         city_path = os.path.abspath(os.path.join(data_dir, 'traffic_counts_datasd.csv'))
@@ -67,6 +86,23 @@ class TrafficData:
         # San Diego County road network (fallback coverage)
         self.county_df = self._load_county_data(county_path)
         self._build_county_index()
+
+        # --- Additive datasets (do not change city/county behavior above) ---
+
+        # Caltrans AADT: measured volumes for state highways, which the surface
+        # street datasets and the Google instruction parser don't cover.
+        aadt_path = os.path.abspath(os.path.join(data_dir, 'Traffic_Volumes_AADT.csv'))
+        self.aadt_df = self._load_aadt_data(aadt_path)
+        self._build_highway_index()
+
+        # Supplemental speed-based road inventories: extra coverage consulted
+        # ONLY when the city and county datasets miss, so existing matches are
+        # unchanged. Roads_Highway.csv uses the Roads_All schema; Encinitas_Roads
+        # uses FullName/SpeedPosted.
+        self._build_supplemental_index([
+            (os.path.abspath(os.path.join(data_dir, 'Roads_Highway.csv')), 'roads_all'),
+            (os.path.abspath(os.path.join(data_dir, 'Encinitas_Roads.csv')), 'encinitas'),
+        ])
 
     def _load_data(self, path):
         """Load and preprocess the traffic CSV data."""
@@ -189,6 +225,157 @@ class TrafficData:
                 'avg_speed': None if pd.isna(speed) else float(speed),
                 'sample_size': int(sample_size[street_name])
             }
+
+    # ------------------------------------------------------------------
+    # Caltrans AADT (measured highway volumes) — additive
+    # ------------------------------------------------------------------
+    def _load_aadt_data(self, path):
+        """Load Caltrans AADT measured counts, restricted to San Diego county."""
+        try:
+            if not os.path.exists(path):
+                print("⚠️ AADT file not found; highways fall back to county estimates")
+                return pd.DataFrame()
+
+            wanted = {'RTE', 'CNTY', 'BACK_AADT', 'AHEAD_AADT', 'DESCRIPTION'}
+            df = pd.read_csv(path, usecols=lambda c: c in wanted, low_memory=False)
+            if 'RTE' not in df.columns:
+                print(f"⚠️ AADT missing RTE column. Found: {df.columns.tolist()}")
+                return pd.DataFrame()
+
+            # Restrict to San Diego county when that code is present.
+            if 'CNTY' in df.columns and (df['CNTY'] == 'SD').any():
+                df = df[df['CNTY'] == 'SD'].copy()
+
+            df['RTE'] = pd.to_numeric(df['RTE'], errors='coerce')
+            df['BACK_AADT'] = pd.to_numeric(df.get('BACK_AADT'), errors='coerce')
+            df['AHEAD_AADT'] = pd.to_numeric(df.get('AHEAD_AADT'), errors='coerce')
+            df = df.dropna(subset=['RTE'])
+
+            print(f"✅ Loaded {len(df)} AADT highway records")
+            return df
+        except Exception as e:
+            print(f"⚠️ Error loading AADT CSV: {e}")
+            return pd.DataFrame()
+
+    def _build_highway_index(self):
+        """Index AADT by state route number -> representative daily volume."""
+        self.highway_index = {}
+        if getattr(self, 'aadt_df', None) is None or self.aadt_df.empty:
+            return
+        df = self.aadt_df
+        for rte in df['RTE'].dropna().unique():
+            seg = df[df['RTE'] == rte]
+            vols = pd.concat([seg['BACK_AADT'], seg['AHEAD_AADT']]).dropna()
+            if vols.empty:
+                continue
+            self.highway_index[str(int(rte))] = {
+                'aadt': float(vols.median()),
+                'sample_size': int(len(seg)),
+            }
+
+    def _aadt_to_level(self, aadt):
+        """Map a measured highway AADT to a (gentler) congestion level name."""
+        if aadt is None or pd.isna(aadt) or aadt <= 0:
+            return 'moderate'
+        t = self.FREEWAY_AADT_THRESHOLDS
+        if aadt < t['very_low']:
+            return 'very_low'
+        elif aadt < t['low']:
+            return 'low'
+        elif aadt < t['moderate']:
+            return 'moderate'
+        elif aadt < t['high']:
+            return 'high'
+        return 'very_high'
+
+    def _lookup_highway(self, route_number):
+        """Look up a state route number in the AADT index."""
+        info = self.highway_index.get(str(route_number)) if hasattr(self, 'highway_index') else None
+        if not info:
+            return None
+        level = self._aadt_to_level(info['aadt'])
+        return {
+            'level': level,
+            'multiplier': self.FREEWAY_MULTIPLIERS[level],
+            'count': info['aadt'],
+            'speed': None,
+            'source': 'highway_aadt',
+        }
+
+    # Highway references in Google instructions: I-5, I-805, CA-163, US-101, SR-78…
+    _HIGHWAY_RE = re.compile(r'\b(?:I|CA|US|SR|HWY|HIGHWAY|INTERSTATE|ROUTE)[-\s]?(\d{1,3})\b')
+
+    def _extract_highways_from_instruction(self, text):
+        """Return state route numbers we have AADT data for, from a text string."""
+        if not text or not hasattr(self, 'highway_index') or not self.highway_index:
+            return []
+        nums = self._HIGHWAY_RE.findall(str(text).upper())
+        return list({n for n in nums if n in self.highway_index})
+
+    # ------------------------------------------------------------------
+    # Supplemental speed-based road inventories — additive (gap-fill only)
+    # ------------------------------------------------------------------
+    def _build_supplemental_index(self, sources):
+        """Build name -> avg speed from extra road inventories (gap-fill only)."""
+        self.supplemental_index = {}
+        speeds = {}  # normalized name -> list of speeds
+        for path, kind in sources:
+            try:
+                if not os.path.exists(path):
+                    continue
+                if kind == 'encinitas':
+                    df = pd.read_csv(path, usecols=lambda c: c in {'FullName', 'SpeedPosted'}, low_memory=False)
+                    names = df.get('FullName')
+                    spd = pd.to_numeric(df.get('SpeedPosted'), errors='coerce')
+                else:  # Roads_All schema
+                    df = pd.read_csv(path, usecols=lambda c: c in {'RD30NAME', 'RD30SFX', 'RD30FULL', 'SPEED'}, low_memory=False)
+                    base = df.get('RD30NAME', pd.Series(dtype=str)).fillna('').astype(str).str.strip()
+                    sfx = df.get('RD30SFX', pd.Series(dtype=str)).fillna('').astype(str).str.strip()
+                    names = (base + ' ' + sfx).str.strip()
+                    full = df.get('RD30FULL', pd.Series(dtype=str)).fillna('').astype(str).str.strip()
+                    names = names.where(names.str.len() > 0, full)
+                    spd = pd.to_numeric(df.get('SPEED'), errors='coerce')
+
+                if names is None:
+                    continue
+                for raw, s in zip(names.tolist(), spd.tolist()):
+                    if not isinstance(raw, str):
+                        continue
+                    norm = self._normalize_street_name(raw)
+                    if len(norm) <= 2:
+                        continue
+                    speeds.setdefault(norm, []).append(s)
+                print(f"✅ Loaded supplemental roads from {os.path.basename(path)} ({len(df)} rows)")
+            except Exception as e:
+                print(f"⚠️ Error loading supplemental roads {path}: {e}")
+
+        for norm, vals in speeds.items():
+            valid = [v for v in vals if pd.notna(v) and v > 0]
+            self.supplemental_index[norm] = {
+                'avg_speed': (sum(valid) / len(valid)) if valid else None,
+                'sample_size': len(vals),
+            }
+
+    def _lookup_supplemental(self, normalized):
+        """Look a normalized name up in the supplemental speed index."""
+        if not getattr(self, 'supplemental_index', None):
+            return None
+        if normalized in self.supplemental_index:
+            speed = self.supplemental_index[normalized]['avg_speed']
+        else:
+            matches = [d['avg_speed'] for s, d in self.supplemental_index.items()
+                       if d['avg_speed'] is not None and (normalized in s or s in normalized)]
+            if not matches:
+                return None
+            speed = sum(matches) / len(matches)
+        level = self._speed_to_level(speed)
+        return {
+            'level': level,
+            'multiplier': self.CONGESTION_MULTIPLIERS[level],
+            'count': None,
+            'speed': speed,
+            'source': 'supplemental_roads',
+        }
 
     def _normalize_street_name(self, street_name):
         """
@@ -365,11 +552,31 @@ class TrafficData:
 
         normalized = self._normalize_street_name(street_name)
 
+        # Explicit state-route references (e.g. "I-15", "CA-163") use measured
+        # Caltrans AADT directly — otherwise they would spuriously partial-match a
+        # surface street. Only triggers for routes we actually have AADT for, so
+        # ordinary street names (which never match the highway pattern) are
+        # resolved by the unchanged city -> county logic below.
+        hw_nums = self._extract_highways_from_instruction(normalized)
+        if hw_nums:
+            hw = self._lookup_highway(hw_nums[0])
+            if hw is not None:
+                return hw
+
         city = self._lookup_city(normalized)
         if city is not None:
             return city
 
-        return self._lookup_county(normalized)
+        county = self._lookup_county(normalized)
+        if county is not None:
+            return county
+
+        # Additive fallback (only reached when city + county both miss):
+        supplemental = self._lookup_supplemental(normalized)
+        if supplemental is not None:
+            return supplemental
+
+        return None
 
     def get_traffic_level(self, street_name):
         """
@@ -406,10 +613,13 @@ class TrafficData:
 
         multipliers = []
         street_details = []
+        highway_nums = set()
 
         for step in route_steps:
             instruction = step.get('instruction', '')
             streets = self._extract_street_from_instruction(instruction)
+            # State routes the street parser can't see (e.g. "Merge onto I-15 N").
+            highway_nums.update(self._extract_highways_from_instruction(instruction))
 
             for street in streets:
                 result = self._lookup_street(street)
@@ -430,6 +640,20 @@ class TrafficData:
                         detail['speed'] = result['speed']
                     street_details.append(detail)
 
+        # Factor in state highways (measured Caltrans AADT), deduped across the
+        # whole route so a freeway named in many steps isn't over-weighted.
+        for route_num in highway_nums:
+            result = self._lookup_highway(route_num)
+            if result and result['level'] != 'unknown':
+                multipliers.append(result['multiplier'])
+                street_details.append({
+                    'street': f'HWY-{route_num}',
+                    'level': result['level'],
+                    'multiplier': result['multiplier'],
+                    'source': result['source'],
+                    'count': result['count'],
+                })
+
         if not multipliers:
             return {
                 'multiplier': 1.0,
@@ -437,6 +661,8 @@ class TrafficData:
                 'streets_matched': 0,
                 'city_matches': 0,
                 'county_matches': 0,
+                'highway_matches': 0,
+                'supplemental_matches': 0,
                 'street_details': []
             }
 
@@ -453,6 +679,8 @@ class TrafficData:
 
         city_matches = sum(1 for d in street_details if d['source'] == 'city_counts')
         county_matches = sum(1 for d in street_details if d['source'] == 'county_roads')
+        highway_matches = sum(1 for d in street_details if d['source'] == 'highway_aadt')
+        supplemental_matches = sum(1 for d in street_details if d['source'] == 'supplemental_roads')
 
         return {
             'multiplier': round(avg_multiplier, 3),
@@ -460,6 +688,8 @@ class TrafficData:
             'streets_matched': len(multipliers),
             'city_matches': city_matches,
             'county_matches': county_matches,
+            'highway_matches': highway_matches,
+            'supplemental_matches': supplemental_matches,
             'street_details': street_details
         }
 
