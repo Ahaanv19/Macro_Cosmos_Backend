@@ -1,21 +1,173 @@
-MIT License
+MACRO COSMOS — PROPRIETARY SOFTWARE LICENSE
+Copyright (c) 2026 Ahaan Vaidyanathan and Rudransh Guha
+All Rights Reserved.
 
-Copyright (c) 2026 Ahaan Vaidyanathan
+================================================================================
+MACRO COSMOS PROPRIETARY LICENSE v1.0
+================================================================================
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license governs the use of the software, source code, documentation,
+assets, and all associated files (collectively, the "Work") for the project
+known as "Macro Cosmos," including but not limited to the frontend and backend
+repositories. The Work is the exclusive intellectual property of:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+    Ahaan Vaidyanathan
+    Rudransh Guha
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+(collectively referred to as the "Owners")
+
+Each Owner holds an equal, undivided 50% interest in the Work. No action
+may be taken with respect to the Work that requires consent — including but
+not limited to licensing, sublicensing, transfer of ownership, or public
+representation — without the explicit written agreement of BOTH Owners.
+
+================================================================================
+SECTION 1 — NO OPEN-SOURCE LICENSE GRANTED
+================================================================================
+
+This Work is NOT open-source software. No open-source license (including but
+not limited to MIT, Apache 2.0, GPL, BSD, or Creative Commons) is granted.
+The presence of this Work in a public repository does not constitute a grant
+of any rights to any third party.
+
+Viewing this repository does not grant you any license, right, or permission
+to use, copy, modify, distribute, or reproduce the Work or any portion thereof.
+
+================================================================================
+SECTION 2 — PROHIBITED ACTIONS (WITHOUT PRIOR WRITTEN CONSENT)
+================================================================================
+
+The following actions are STRICTLY PROHIBITED for any individual or entity
+other than the Owners, unless prior explicit written consent has been obtained
+from BOTH Ahaan Vaidyanathan AND Rudransh Guha:
+
+2.1  COPYING & REPRODUCTION
+     You may not copy, reproduce, or duplicate the Work or any portion of it,
+     in whole or in part, in any medium or format.
+
+2.2  MODIFICATION & DERIVATIVE WORKS
+     You may not modify, adapt, translate, reverse-engineer, decompile,
+     disassemble, or create derivative works based on the Work.
+
+2.3  DISTRIBUTION & PUBLICATION
+     You may not distribute, publish, broadcast, transmit, or otherwise make
+     the Work or any portion of it available to any third party.
+
+2.4  FORKING
+     You may not fork this repository or any repository containing this Work
+     on any platform (including but not limited to GitHub, GitLab, Bitbucket)
+     for any purpose, whether public or private, except for purely private
+     personal study with no redistribution.
+
+2.5  TEMPLATES & REUSE
+     You may not use this Work, its structure, code, design, or any portion
+     thereof as a template, boilerplate, starter project, or basis for any
+     other project, product, or publication.
+
+2.6  PROFESSIONAL REPRESENTATION
+     You may not display, reference, claim authorship of, or represent this
+     Work — in whole or in part — on:
+       (a) resumes or CVs
+       (b) LinkedIn profiles or any professional networking platform
+       (c) personal websites, blogs, or online portfolios
+       (d) job applications or interview materials
+       (e) any other professional or career-oriented medium
+
+2.7  ACADEMIC & INSTITUTIONAL USE
+     You may not submit, reference, present, or represent this Work — in
+     whole or in part — as part of:
+       (a) college or university applications
+       (b) scholarship or grant applications
+       (c) academic coursework, theses, or dissertations
+       (d) academic competitions, hackathons, or science fairs
+       (e) any other institutional admissions or evaluation process
+
+2.8  COMMERCIAL USE
+     You may not use the Work or any portion thereof for any commercial
+     purpose, including but not limited to sale, licensing, or incorporation
+     into a commercial product or service.
+
+================================================================================
+SECTION 3 — PERMISSION PROCESS
+================================================================================
+
+Any individual or entity seeking to engage in any activity described in
+Section 2 must:
+
+  (a) Submit a written request to BOTH Owners describing the intended use;
+  (b) Receive explicit written approval from BOTH Ahaan Vaidyanathan AND
+      Rudransh Guha before proceeding; and
+  (c) Comply with any conditions attached to such approval.
+
+Approval from only one Owner is insufficient and does not constitute
+authorization under this License.
+
+================================================================================
+SECTION 4 — OWNERSHIP & JOINT RIGHTS
+================================================================================
+
+4.1  The Owners jointly and equally own all intellectual property rights in
+     the Work, including copyright, trade secret rights, and any other
+     applicable intellectual property rights.
+
+4.2  Neither Owner may unilaterally grant a license to a third party, transfer
+     their ownership interest, or take any action that would diminish the other
+     Owner's rights in the Work without the other Owner's prior written consent.
+
+4.3  This equal ownership arrangement is perpetual and survives any
+     termination of collaboration between the Owners.
+
+================================================================================
+SECTION 5 — ENFORCEMENT & REMEDIES
+================================================================================
+
+5.1  Any unauthorized use of the Work constitutes a violation of applicable
+     copyright law and the terms of this License.
+
+5.2  The Owners reserve the right to pursue all available legal remedies,
+     including but not limited to injunctive relief, monetary damages, and
+     recovery of attorneys' fees and costs, for any violation of this License.
+
+5.3  Violations of Sections 2.6 and 2.7 (professional and academic misuse)
+     are considered material breaches and will be pursued accordingly.
+
+================================================================================
+SECTION 6 — DISCLAIMER OF WARRANTIES
+================================================================================
+
+THE WORK IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, OR NON-INFRINGEMENT. IN NO EVENT
+SHALL THE OWNERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE WORK OR THE USE OR OTHER
+DEALINGS IN THE WORK.
+
+================================================================================
+SECTION 7 — SEVERABILITY
+================================================================================
+
+If any provision of this License is found to be invalid or unenforceable
+under applicable law, the remaining provisions shall continue in full force
+and effect without modification.
+
+================================================================================
+SECTION 8 — GOVERNING LAW
+================================================================================
+
+This License shall be governed by and construed in accordance with the laws
+of the State of California, United States of America, without regard to its
+conflict of law provisions.
+
+================================================================================
+SECTION 9 — ENTIRE AGREEMENT
+================================================================================
+
+This License constitutes the entire agreement between the Owners and any
+third party with respect to the Work and supersedes all prior or
+contemporaneous understandings, agreements, representations, or warranties.
+
+================================================================================
+
+For permission requests, contact both Owners directly.
+
+Copyright (c) 2026 Ahaan Vaidyanathan and Rudransh Guha — All Rights Reserved.
