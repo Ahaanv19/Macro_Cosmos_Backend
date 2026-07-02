@@ -6,6 +6,18 @@ from __init__ import app
 from api.jwt_authorize import token_required
 from model.user import User
 
+# App-wide rate limiter (for account-creation throttling). No-op fallback so a
+# missing security module never breaks the user API.
+try:
+    from utils.security import limiter
+except Exception:  # pragma: no cover
+    class _NoLimit:
+        def limit(self, *a, **k):
+            def deco(f):
+                return f
+            return deco
+    limiter = _NoLimit()
+
 # Create a Blueprint for the user API
 user_api = Blueprint('user_api', __name__, url_prefix='/api')
 
@@ -73,6 +85,9 @@ class UserAPI:
         """
         Users API operation for Create, Read, Update, Delete.
         """
+        # IP-based throttling for account creation (only POST is limited; GET/PUT/
+        # DELETE are unaffected by the methods filter).
+        decorators = [limiter.limit("6 per minute; 30 per hour; 60 per day", methods=["POST"])]
 
         def post(self):
             """
@@ -180,13 +195,48 @@ class UserAPI:
                 if user is None or not user.is_password(password):
                     return {'message': "Invalid user id or password"}, 401
 
+                # Two-factor (TOTP): only enforced for users who enabled it, so
+                # accounts without MFA log in exactly as before.
+                from api.mfa import verify_user_otp, mfa_required_for_user, user_has_second_factor
+                from model.passkey import UserPasskey
+                otp = body.get('otp') or body.get('code')
+                mfa_enabled, otp_ok = verify_user_otp(user.id, otp)
+                if mfa_enabled and not otp_ok:
+                    return {
+                        "message": "Invalid two-factor code" if otp else "Two-factor code required",
+                        "mfa_required": True,
+                    }, 401
+
+                # HARD 2FA: if the account has a passkey, a password alone is not a
+                # second factor — they must sign in WITH the passkey, OR use a
+                # one-time backup code as recovery. (TOTP users already satisfied
+                # the OTP check above.)
+                if (mfa_required_for_user(user) and not mfa_enabled
+                        and len(UserPasskey.for_user(user.id)) > 0):
+                    from model.backup_codes import UserBackupCode
+                    backup_code = body.get('backup_code')
+                    if not (backup_code and UserBackupCode.verify_and_consume(user.id, backup_code)):
+                        return {
+                            "message": "This account requires two-factor sign-in. Use your passkey, or a one-time backup code.",
+                            "use_passkey": True,
+                            "backup_available": True,
+                        }, 401
+                    # else: recovered via a valid one-time backup code -> allow login
+
+                # No second factor enrolled yet -> allow login (so they can set one
+                # up) but flag that setup is required, so nobody is locked out.
+                setup_required = mfa_required_for_user(user) and not user_has_second_factor(user.id)
+
                 # Generate token
                 token = jwt.encode(
                     {"_uid": user._uid},
                     current_app.config["SECRET_KEY"],
                     algorithm="HS256"
                 )
-                resp = Response(f"Authentication for {user._uid} successful")
+                resp = jsonify({
+                    "message": f"Authentication for {user._uid} successful",
+                    "mfa_setup_required": setup_required,
+                })
                 resp.set_cookie(
                     current_app.config["JWT_TOKEN_NAME"],
                     token,

@@ -21,3 +21,5 @@ stripe
 geopy
 Flask-Limiter
 bleach
+pyotp
+webauthn

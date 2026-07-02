@@ -4,6 +4,18 @@ from api.jwt_authorize import token_required
 from model.business import BusinessSubmission, APPROVED_BUSINESS_ID_OFFSET
 from model.user import User
 
+# Reuse the app-wide rate limiter for account-creation throttling. Degrade to a
+# no-op decorator if the security module isn't available so nothing breaks.
+try:
+    from utils.security import limiter
+except Exception:  # pragma: no cover
+    class _NoLimit:
+        def limit(self, *a, **k):
+            def deco(f):
+                return f
+            return deco
+    limiter = _NoLimit()
+
 # Reuse the central XSS sanitizer; fall back to a minimal escaper if unavailable.
 try:
     from utils.security import sanitize_text
@@ -462,6 +474,7 @@ def load_approved_into_memory():
 
 
 @businesses_api.route('/business/register', methods=['POST'])
+@limiter.limit("5 per minute; 20 per hour; 50 per day")
 def register_business_account():
     """
     Create a Business-role account using the existing User model + security

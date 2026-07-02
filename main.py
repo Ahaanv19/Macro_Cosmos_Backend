@@ -68,6 +68,8 @@ from api.live import incident_api
 from api.subscription import subscription_api
 from api.stripe_api import stripe_api
 from api.businesses import businesses_api
+from api.mfa import mfa_api
+from api.webauthn import webauthn_api
 
 # database Initialization functions
 from model.carChat import CarChat
@@ -81,6 +83,9 @@ from model.vote import Vote, initVotes
 from model.savedLocations import SavedLocations, initSavedLocations
 from model.subscription import Subscription, SubscriptionRequest, PaymentHistory, RouteUsage, initSubscriptions
 from model.business import BusinessSubmission, initBusinessSubmissions
+from model.mfa import UserMFA, initUserMFA
+from model.passkey import UserPasskey, initUserPasskeys
+from model.backup_codes import UserBackupCode, initUserBackupCodes
 
 
 # server only View
@@ -108,6 +113,8 @@ app.register_blueprint(incident_api)
 app.register_blueprint(subscription_api)
 app.register_blueprint(stripe_api)
 app.register_blueprint(businesses_api)
+app.register_blueprint(mfa_api)
+app.register_blueprint(webauthn_api)
 
 
 # Tell Flask-Login the view function name of your login route
@@ -270,6 +277,21 @@ def generate_data():
     except Exception as e:
         print(f"Error in initBusinessSubmissions: {e}")
 
+    try:
+        initUserMFA()
+    except Exception as e:
+        print(f"Error in initUserMFA: {e}")
+
+    try:
+        initUserPasskeys()
+    except Exception as e:
+        print(f"Error in initUserPasskeys: {e}")
+
+    try:
+        initUserBackupCodes()
+    except Exception as e:
+        print(f"Error in initUserBackupCodes: {e}")
+
 # Backup the old database
 def backup_database(db_uri, backup_uri):
     """Backup the current database."""
@@ -348,6 +370,18 @@ with app.app_context():
         BusinessSubmission.__table__.create(db.engine, checkfirst=True)
     except Exception as e:
         print(f"business_submissions table init: {e}")
+    try:
+        UserMFA.__table__.create(db.engine, checkfirst=True)
+    except Exception as e:
+        print(f"user_mfa table init: {e}")
+    try:
+        UserPasskey.__table__.create(db.engine, checkfirst=True)
+    except Exception as e:
+        print(f"user_passkeys table init: {e}")
+    try:
+        UserBackupCode.__table__.create(db.engine, checkfirst=True)
+    except Exception as e:
+        print(f"user_backup_codes table init: {e}")
     try:
         from api.businesses import load_approved_into_memory
         load_approved_into_memory()
