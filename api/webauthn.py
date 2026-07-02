@@ -19,6 +19,8 @@ Endpoints:
 """
 
 import os
+import json
+import time
 
 import jwt
 from flask import Blueprint, request, jsonify, g, session, current_app
@@ -61,6 +63,37 @@ def _expected_origin():
     return parts[0] if parts else 'http://localhost:4887'
 
 
+def _sign_challenge(chal_b64, purpose, uid=None):
+    """Sign the WebAuthn challenge into a short-lived stateless token.
+
+    The challenge is already sent to (and visible to) the client as part of the
+    options, so signing it back leaks nothing. This removes the dependency on a
+    cross-site session cookie for the challenge — cookies are dropped SameSite
+    cross-origin and blocked entirely by Safari/iOS, which broke passkeys on the
+    deployed (github.io -> backend) setup. HS256 signature + short expiry make it
+    tamper-proof and single-window.
+    """
+    payload = {"chal": chal_b64, "purpose": purpose, "exp": int(time.time()) + 300}
+    if uid is not None:
+        payload["uid"] = uid
+    return jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
+
+
+def _read_challenge_token(token, purpose, uid=None):
+    """Verify a challenge token and return the challenge (or None if invalid)."""
+    if not token:
+        return None
+    try:
+        data = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
+    except Exception:
+        return None
+    if data.get("purpose") != purpose:
+        return None
+    if uid is not None and data.get("uid") != uid:
+        return None
+    return data.get("chal")
+
+
 def _issue_jwt_cookie(user, message):
     """Mirror /api/authenticate's token + cookie so passkey login is a real login."""
     token = jwt.encode({"_uid": user._uid}, current_app.config["SECRET_KEY"], algorithm="HS256")
@@ -90,18 +123,25 @@ def register_begin():
             user_verification=UserVerificationRequirement.PREFERRED,
         ),
     )
-    session['wa_reg_chal'] = bytes_to_base64url(opts.challenge)
-    return current_app.response_class(options_to_json(opts), mimetype='application/json')
+    chal_b64 = bytes_to_base64url(opts.challenge)
+    session['wa_reg_chal'] = chal_b64  # kept as same-origin fallback
+    options_json = json.loads(options_to_json(opts))
+    # Stateless challenge token so registration survives cross-origin (no cookie).
+    options_json['challengeToken'] = _sign_challenge(chal_b64, 'reg', user.id)
+    return jsonify(options_json)
 
 
 @webauthn_api.route('/register/complete', methods=['POST'])
 @token_required()
 def register_complete():
     user = g.current_user
-    chal = session.pop('wa_reg_chal', None)
+    body = request.get_json(silent=True) or {}
+    # Prefer the stateless token (works cross-origin); fall back to session cookie.
+    chal = _read_challenge_token(body.get('challenge_token'), 'reg', user.id)
+    if not chal:
+        chal = session.pop('wa_reg_chal', None)
     if not chal:
         return jsonify({'error': 'No passkey registration in progress'}), 400
-    body = request.get_json(silent=True) or {}
     credential = body.get('credential') or body
     name = (body.get('name') or '').strip() or 'Passkey'
     try:
@@ -141,17 +181,25 @@ def login_begin():
         allow_credentials=allow,
         user_verification=UserVerificationRequirement.PREFERRED,
     )
-    session['wa_auth_chal'] = bytes_to_base64url(opts.challenge)
-    return current_app.response_class(options_to_json(opts), mimetype='application/json')
+    chal_b64 = bytes_to_base64url(opts.challenge)
+    session['wa_auth_chal'] = chal_b64  # kept as same-origin fallback
+    options_json = json.loads(options_to_json(opts))
+    # Stateless challenge token so login survives cross-origin (no cookie).
+    options_json['challengeToken'] = _sign_challenge(chal_b64, 'auth')
+    return jsonify(options_json)
 
 
 @webauthn_api.route('/login/complete', methods=['POST'])
 def login_complete():
-    chal = session.pop('wa_auth_chal', None)
+    body = request.get_json(silent=True) or {}
+    credential = body.get('credential') or body
+    # Prefer the stateless token (works cross-origin); fall back to session cookie.
+    chal = _read_challenge_token(body.get('challenge_token'), 'auth')
+    if not chal:
+        chal = session.pop('wa_auth_chal', None)
     if not chal:
         return jsonify({'error': 'No passkey login in progress'}), 400
-    body = request.get_json(silent=True) or {}
-    raw_id = body.get('rawId') or body.get('id')
+    raw_id = credential.get('rawId') or credential.get('id')
     if not raw_id:
         return jsonify({'error': 'Invalid passkey response'}), 400
     pk = UserPasskey.by_credential_id(raw_id)
@@ -162,7 +210,7 @@ def login_complete():
         return jsonify({'error': 'Account not found'}), 404
     try:
         verification = verify_authentication_response(
-            credential=body,
+            credential=credential,
             expected_challenge=base64url_to_bytes(chal),
             expected_rp_id=_rp_id(),
             expected_origin=_expected_origin(),
