@@ -24,7 +24,11 @@ cors = CORS(app,
         'http://127.0.0.1:4887', 
         'http://localhost:4100',
         'http://127.0.0.1:4100',
-        'https://ahaanv19.github.io'
+        'https://ahaanv19.github.io',
+        'https://macro-cosmos.netlify.app',
+        # Netlify deploy/branch previews (anchored regex — flask-cors treats
+        # patterns containing regex metachars as regular expressions).
+        r'^https://([a-z0-9-]+--)?macro-cosmos\.netlify\.app$',
     ],
     allow_headers=['Content-Type', 'Authorization', 'X-Origin'],
     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']

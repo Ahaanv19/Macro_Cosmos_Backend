@@ -6,8 +6,10 @@ import os
 # Create a Blueprint for sections
 sections_bp = Blueprint('sections', __name__)
 
-# Enable CORS for the Blueprint (Allow all origins for now)
-CORS(sections_bp, resources={r"/*": {"origins": "https://ahaanv19.github.io"}})  # Apply CORS
+# Enable CORS for the Blueprint. Allow both front-end deployments (GitHub Pages
+# and Netlify) so the sections routes work from either domain, consistent with
+# the app-level CORS in __init__.py.
+CORS(sections_bp, resources={r"/*": {"origins": ["https://ahaanv19.github.io", "https://macro-cosmos.netlify.app", r"^https://([a-z0-9-]+--)?macro-cosmos\.netlify\.app$"]}})  # Apply CORS
 
 # Path to the SQLite database
 DB_PATH = './instance/volumes/user_management.db'

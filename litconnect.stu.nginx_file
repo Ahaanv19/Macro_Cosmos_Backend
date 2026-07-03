@@ -1,3 +1,22 @@
+# Map the incoming Origin to an allowed CORS origin. Because credentials are
+# used (cookies/JWT), the Access-Control-Allow-Origin MUST echo the exact
+# requesting origin — a wildcard "*" is not allowed with credentials, and only a
+# single origin value may be returned. This map lets the SAME backend serve both
+# front-end deployments. An unlisted origin maps to "" and nginx then omits the
+# header, so the request is correctly blocked.
+#
+# This `map` lives in the http{} context; conf.d/*.conf and sites-enabled/*
+# files are included there, so keeping it at the top of this file is valid.
+map $http_origin $cors_allow_origin {
+    default                       "";
+    "https://ahaanv19.github.io"  "https://ahaanv19.github.io";  # GitHub Pages
+    # Netlify production + deploy/branch previews (e.g.
+    # deploy-preview-42--macro-cosmos.netlify.app). The regex is anchored (^...$)
+    # so it cannot match a look-alike suffix domain; $http_origin echoes the exact
+    # requesting origin, as required for credentialed CORS.
+    "~*^https://([a-z0-9-]+--)?macro-cosmos\.netlify\.app$"  $http_origin;
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -6,10 +25,12 @@ server {
     location / {
         proxy_pass http://localhost:8888;
 
-        # Preflighted requests
+        # Preflighted requests are answered here (204) with the matching origin.
+        # Non-OPTIONS requests are proxied to Flask, which sets its own CORS
+        # headers via flask-cors — so headers are never duplicated.
         if ($request_method = OPTIONS) {
             add_header "Access-Control-Allow-Credentials" "true" always;
-            add_header "Access-Control-Allow-Origin" "https://ahaanv19.github.io" always;
+            add_header "Access-Control-Allow-Origin" $cors_allow_origin always;
             add_header "Access-Control-Allow-Methods" "GET, POST, PUT, DELETE, OPTIONS" always;
             add_header "Access-Control-Allow-MaxAge" 600 always;
             add_header "Access-Control-Allow-Headers" "Authorization, Origin, X-Origin, X-Requested-With, Content-Type, Accept" always;
