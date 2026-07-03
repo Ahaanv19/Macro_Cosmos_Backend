@@ -19,8 +19,10 @@ Endpoints:
 """
 
 import os
+import re
 import json
 import time
+from urllib.parse import urlparse
 
 import jwt
 from flask import Blueprint, request, jsonify, g, session, current_app
@@ -47,7 +49,46 @@ from model.passkey import UserPasskey
 webauthn_api = Blueprint('webauthn_api', __name__, url_prefix='/api/webauthn')
 
 
+# Front-end origins allowed to run passkey ceremonies. WebAuthn is domain-bound:
+# the RP ID must match the page's origin, so a single hardcoded RP ID cannot
+# serve both github.io and netlify.app. Instead we derive the RP ID / expected
+# origin from the request's Origin header (validated here), which lets the SAME
+# backend support every deployment with no per-environment env juggling.
+_NETLIFY_ORIGIN_RE = re.compile(r'^https://([a-z0-9-]+--)?macro-cosmos\.netlify\.app$', re.I)
+_STATIC_ALLOWED_ORIGINS = {
+    'https://ahaanv19.github.io',
+    'http://localhost:4887', 'http://127.0.0.1:4887',
+    'http://localhost:4100', 'http://127.0.0.1:4100',
+    'http://localhost:8888',
+}
+
+
+def _origin_allowed(origin):
+    if not origin:
+        return False
+    if origin in _STATIC_ALLOWED_ORIGINS:
+        return True
+    if _NETLIFY_ORIGIN_RE.match(origin):
+        return True
+    # Also honor any origins explicitly configured via env.
+    raw = os.environ.get('WEBAUTHN_ORIGIN', '')
+    return origin in [p.strip() for p in raw.split(',') if p.strip()]
+
+
+def _current_origin():
+    """The requesting front-end origin, if it's one we allow (else None)."""
+    origin = request.headers.get('Origin')
+    return origin if _origin_allowed(origin) else None
+
+
 def _rp_id():
+    # Derive the relying-party id from the requesting origin's host so passkeys
+    # work on whichever front-end the user is on. Fall back to env / localhost.
+    origin = _current_origin()
+    if origin:
+        host = urlparse(origin).hostname
+        if host:
+            return host
     return os.environ.get('WEBAUTHN_RP_ID', 'localhost')
 
 
@@ -56,6 +97,11 @@ def _rp_name():
 
 
 def _expected_origin():
+    # Verify against the exact origin the ceremony ran on when it's allowed;
+    # otherwise fall back to the configured env origin(s).
+    origin = _current_origin()
+    if origin:
+        return origin
     raw = os.environ.get('WEBAUTHN_ORIGIN', 'http://localhost:4887')
     parts = [p.strip() for p in raw.split(',') if p.strip()]
     if len(parts) > 1:
