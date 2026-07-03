@@ -104,6 +104,16 @@ class TrafficData:
             (os.path.abspath(os.path.join(data_dir, 'Encinitas_Roads.csv')), 'encinitas'),
         ])
 
+        # Bay Area surface-street coverage (San Francisco + Alameda County incl.
+        # Oakland/Berkeley). Kept in a SEPARATE index and consulted only after
+        # every San Diego tier misses, so San Diego routing is untouched. Same
+        # name->speed shape as the supplemental index.
+        self._build_regional_index([
+            (os.path.abspath(os.path.join(data_dir, 'Speed_Limits_per_Street_Segment_20260702.csv')), 'sf_speed'),
+            (os.path.abspath(os.path.join(data_dir, 'Street_Centerlines_8000666157842606599.csv')), 'alameda_centerline'),
+            (os.path.abspath(os.path.join(data_dir, 'Signal_20260702.csv')), 'berkeley_signal'),
+        ])
+
     def _load_data(self, path):
         """Load and preprocess the traffic CSV data."""
         try:
@@ -229,8 +239,17 @@ class TrafficData:
     # ------------------------------------------------------------------
     # Caltrans AADT (measured highway volumes) — additive
     # ------------------------------------------------------------------
+    # Caltrans county codes we serve: San Diego, San Francisco, Alameda.
+    AADT_COUNTIES = ('SD', 'SF', 'ALA')
+
     def _load_aadt_data(self, path):
-        """Load Caltrans AADT measured counts, restricted to San Diego county."""
+        """Load Caltrans AADT measured counts for the counties we serve.
+
+        San Diego, San Francisco and Alameda highway volumes all live in this
+        one statewide file. The CNTY column is kept so ``_build_highway_index``
+        can treat San Diego as the authoritative baseline (unchanged behavior)
+        and only *add* Bay Area-only routes on top.
+        """
         try:
             if not os.path.exists(path):
                 print("⚠️ AADT file not found; highways fall back to county estimates")
@@ -242,9 +261,9 @@ class TrafficData:
                 print(f"⚠️ AADT missing RTE column. Found: {df.columns.tolist()}")
                 return pd.DataFrame()
 
-            # Restrict to San Diego county when that code is present.
-            if 'CNTY' in df.columns and (df['CNTY'] == 'SD').any():
-                df = df[df['CNTY'] == 'SD'].copy()
+            # Restrict to the served counties when the code column is present.
+            if 'CNTY' in df.columns and df['CNTY'].isin(self.AADT_COUNTIES).any():
+                df = df[df['CNTY'].isin(self.AADT_COUNTIES)].copy()
 
             df['RTE'] = pd.to_numeric(df['RTE'], errors='coerce')
             df['BACK_AADT'] = pd.to_numeric(df.get('BACK_AADT'), errors='coerce')
@@ -258,20 +277,38 @@ class TrafficData:
             return pd.DataFrame()
 
     def _build_highway_index(self):
-        """Index AADT by state route number -> representative daily volume."""
+        """Index AADT by state route number -> representative daily volume.
+
+        Two-pass so existing San Diego route values are byte-for-byte unchanged:
+        San Diego is added first as the authoritative baseline, then Bay Area
+        (SF/Alameda) only fills in routes San Diego does not have (e.g. I-580,
+        I-880, I-980). Shared routes like US-101 keep their San Diego value, so
+        no existing lookup shifts.
+        """
         self.highway_index = {}
         if getattr(self, 'aadt_df', None) is None or self.aadt_df.empty:
             return
         df = self.aadt_df
-        for rte in df['RTE'].dropna().unique():
-            seg = df[df['RTE'] == rte]
-            vols = pd.concat([seg['BACK_AADT'], seg['AHEAD_AADT']]).dropna()
-            if vols.empty:
-                continue
-            self.highway_index[str(int(rte))] = {
-                'aadt': float(vols.median()),
-                'sample_size': int(len(seg)),
-            }
+
+        def _add(sub, only_new):
+            for rte in sub['RTE'].dropna().unique():
+                key = str(int(rte))
+                if only_new and key in self.highway_index:
+                    continue
+                seg = sub[sub['RTE'] == rte]
+                vols = pd.concat([seg['BACK_AADT'], seg['AHEAD_AADT']]).dropna()
+                if vols.empty:
+                    continue
+                self.highway_index[key] = {
+                    'aadt': float(vols.median()),
+                    'sample_size': int(len(seg)),
+                }
+
+        if 'CNTY' in df.columns:
+            _add(df[df['CNTY'] == 'SD'], only_new=False)          # baseline (unchanged)
+            _add(df[df['CNTY'].isin(('SF', 'ALA'))], only_new=True)  # Bay-only routes
+        else:
+            _add(df, only_new=False)
 
     def _aadt_to_level(self, aadt):
         """Map a measured highway AADT to a (gentler) congestion level name."""
@@ -375,6 +412,97 @@ class TrafficData:
             'count': None,
             'speed': speed,
             'source': 'supplemental_roads',
+        }
+
+    # ------------------------------------------------------------------
+    # Regional coverage: San Francisco + Alameda County (Oakland/Berkeley)
+    # Additive — a separate index consulted only after every San Diego tier
+    # misses, so San Diego lookups are never affected.
+    # ------------------------------------------------------------------
+    def _build_regional_index(self, sources):
+        """Build name -> avg posted speed for Bay Area surface streets."""
+        self.regional_index = {}
+        speeds = {}  # normalized name -> list of speeds (None allowed = name-only)
+        for path, kind in sources:
+            try:
+                if not os.path.exists(path):
+                    continue
+                if kind == 'sf_speed':
+                    # SF: street + st_type, speedlimit (0 = de-facto 25 residential,
+                    # 99 = freeway which the highway tier already covers).
+                    df = pd.read_csv(path, usecols=lambda c: c in {'street', 'st_type', 'speedlimit'}, low_memory=False)
+                    base = df.get('street', pd.Series(dtype=str)).fillna('').astype(str).str.strip()
+                    sfx = df.get('st_type', pd.Series(dtype=str)).fillna('').astype(str).str.strip()
+                    names = (base + ' ' + sfx).str.strip()
+                    spd = pd.to_numeric(df.get('speedlimit'), errors='coerce')
+                    spd = spd.replace(0, 25)      # SF default residential
+                    spd = spd.where(spd < 99)     # drop freeway sentinel -> NaN
+                elif kind == 'alameda_centerline':
+                    # Alameda County (Oakland, Berkeley, Hayward, Fremont, ...):
+                    # road network with no speed column -> name-only coverage.
+                    df = pd.read_csv(path, usecols=lambda c: c in {'SFEANME', 'SFEATYP'}, low_memory=False)
+                    base = df.get('SFEANME', pd.Series(dtype=str)).fillna('').astype(str).str.strip()
+                    sfx = df.get('SFEATYP', pd.Series(dtype=str)).fillna('').astype(str).str.strip()
+                    # Skip ramps/connectors — they never match a plain street name.
+                    keep = ~sfx.isin(['RAMP', 'CONN'])
+                    names = (base + ' ' + sfx).str.strip()[keep]
+                    spd = pd.Series([None] * len(names), index=names.index)
+                elif kind == 'berkeley_signal':
+                    # Berkeley: signalized-intersection streets with posted speed.
+                    df = pd.read_csv(path, usecols=lambda c: c in {'fullname', 'street_nam', 'speed'}, low_memory=False)
+                    names = df.get('fullname')
+                    if names is None:
+                        names = df.get('street_nam')
+                    names = names.fillna('').astype(str).str.strip()
+                    spd = pd.to_numeric(df.get('speed'), errors='coerce')
+                else:
+                    continue
+
+                if names is None:
+                    continue
+                for raw, s in zip(names.tolist(), spd.tolist()):
+                    if not isinstance(raw, str):
+                        continue
+                    norm = self._normalize_street_name(raw)
+                    if len(norm) <= 2:
+                        continue
+                    speeds.setdefault(norm, []).append(s)
+                print(f"✅ Loaded regional roads from {os.path.basename(path)} ({len(df)} rows)")
+            except Exception as e:
+                print(f"⚠️ Error loading regional roads {path}: {e}")
+
+        for norm, vals in speeds.items():
+            valid = [v for v in vals if v is not None and pd.notna(v) and v > 0]
+            self.regional_index[norm] = {
+                'avg_speed': (sum(valid) / len(valid)) if valid else None,
+                'sample_size': len(vals),
+            }
+
+    def _lookup_regional(self, normalized):
+        """Look a normalized name up in the Bay Area regional speed index."""
+        if not getattr(self, 'regional_index', None):
+            return None
+        if normalized in self.regional_index:
+            speed = self.regional_index[normalized]['avg_speed']
+        else:
+            matches = [d['avg_speed'] for s, d in self.regional_index.items()
+                       if d['avg_speed'] is not None and (normalized in s or s in normalized)]
+            if not matches:
+                # Name-only match (e.g. Alameda centerlines with no speed) still
+                # counts as coverage -> neutral baseline level.
+                if any(normalized in s or s in normalized for s in self.regional_index):
+                    speed = None
+                else:
+                    return None
+            else:
+                speed = sum(matches) / len(matches)
+        level = self._speed_to_level(speed)  # None -> 'moderate' baseline
+        return {
+            'level': level,
+            'multiplier': self.CONGESTION_MULTIPLIERS[level],
+            'count': None,
+            'speed': speed,
+            'source': 'regional_roads',
         }
 
     def _normalize_street_name(self, street_name):
@@ -575,6 +703,12 @@ class TrafficData:
         supplemental = self._lookup_supplemental(normalized)
         if supplemental is not None:
             return supplemental
+
+        # Bay Area regional coverage (SF + Alameda/Oakland/Berkeley). Reached only
+        # when every San Diego tier misses, so San Diego lookups are unaffected.
+        regional = self._lookup_regional(normalized)
+        if regional is not None:
+            return regional
 
         return None
 

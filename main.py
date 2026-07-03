@@ -70,6 +70,7 @@ from api.stripe_api import stripe_api
 from api.businesses import businesses_api
 from api.mfa import mfa_api
 from api.webauthn import webauthn_api
+from api.mtc_511 import mtc_511_api
 
 # database Initialization functions
 from model.carChat import CarChat
@@ -115,6 +116,7 @@ app.register_blueprint(stripe_api)
 app.register_blueprint(businesses_api)
 app.register_blueprint(mfa_api)
 app.register_blueprint(webauthn_api)
+app.register_blueprint(mtc_511_api)
 
 
 # Tell Flask-Login the view function name of your login route
