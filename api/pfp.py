@@ -3,6 +3,7 @@ from flask_restful import Api, Resource
 from api.jwt_authorize import token_required
 from model.user import User
 from model.pfp import pfp_base64_decode, pfp_base64_upload, pfp_file_delete
+from model.pfp_store import UserProfilePicture
 
 pfp_api = Blueprint('pfp_api', __name__, url_prefix='/api/id')
 api = Api(pfp_api)
@@ -31,6 +32,12 @@ class _PFP(Resource):
     def get(self):
         current_user = g.current_user
 
+        # Prefer the database-stored image (persists across reloads/instances).
+        db_data = UserProfilePicture.get_data(current_user.id)
+        if db_data:
+            return {'pfp': db_data}, 200
+
+        # Fallback: legacy file-based storage (for pre-existing pictures).
         if current_user.pfp:
             base64_encode = pfp_base64_decode(current_user.uid, current_user.pfp)
             if not base64_encode:
@@ -76,16 +83,25 @@ class _PFP(Resource):
         if not user:
             return {'message': 'User not found'}, 404
 
+        # Clear the database-stored image (primary storage) first.
+        had_db = UserProfilePicture.get_data(user.id) is not None
+        try:
+            UserProfilePicture.clear_data(user.id)
+        except Exception:
+            pass
+
         if user.pfp:
             if not pfp_file_delete(user_uid, user.pfp):
                 return {'message': 'An error occurred while deleting the profile picture, check permissions'}, 500
-            
+
             #  Remove the user's reference to the profile picture
             try:
                 user.delete_pfp()  # Call the delete_pfp method to update the database
                 return {'message': 'Profile picture deleted successfully'}, 200
             except Exception as e:
                 return {'message': f'An error occurred while deleting the profile picture database reference: {str(e)}'}, 500
+        elif had_db:
+            return {'message': 'Profile picture deleted successfully'}, 200
         else:
             return {'message': 'Profile picture not set.'}, 404
 
@@ -114,18 +130,25 @@ class _PFP(Resource):
         if 'pfp' not in request.json:
             return {'message': 'Base64 image data required.'}, 400
         base64_image = request.json['pfp']
-       
-        # Make an image file from the base64 data 
-        filename = pfp_base64_upload(base64_image, current_user.uid)
-        if not filename:
-            return {'message': 'An error occurred while uploading the profile picture'}, 500
-        
-        # Update the user's profile picture to the uploaded file
+
+        # Primary storage: the database, so the picture persists across reloads,
+        # restarts, and multiple instances (fixes "uploads but doesn't save").
         try:
-            # write the filename reference to the database
-            current_user.update({"pfp": filename})
-            return {'message': 'Profile picture updated successfully'}, 200
+            UserProfilePicture.set_data(current_user.id, base64_image)
         except Exception as e:
-            return {'message': f'A database error occurred while assigning profile picture: {str(e)}'}, 500
+            return {'message': f'A database error occurred while saving profile picture: {str(e)}'}, 500
+
+        # Best-effort: also keep the legacy file + filename reference so anything
+        # that reads user.pfp (e.g. the admin table) still works when the
+        # filesystem is writable. A failure here does NOT fail the request,
+        # because the DB copy above is the source of truth.
+        try:
+            filename = pfp_base64_upload(base64_image, current_user.uid)
+            if filename:
+                current_user.update({"pfp": filename})
+        except Exception:
+            pass
+
+        return {'message': 'Profile picture updated successfully'}, 200
         
 api.add_resource(_PFP, '/pfp')
