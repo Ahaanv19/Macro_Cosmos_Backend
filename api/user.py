@@ -236,6 +236,10 @@ class UserAPI:
                 resp = jsonify({
                     "message": f"Authentication for {user._uid} successful",
                     "mfa_setup_required": setup_required,
+                    # Also returned in the body so clients that can't use the
+                    # cross-site cookie (e.g. installed iOS PWAs) can send it as
+                    # an Authorization: Bearer header. The cookie stays primary.
+                    "token": token,
                 })
                 resp.set_cookie(
                     current_app.config["JWT_TOKEN_NAME"],

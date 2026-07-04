@@ -143,7 +143,9 @@ def _read_challenge_token(token, purpose, uid=None):
 def _issue_jwt_cookie(user, message):
     """Mirror /api/authenticate's token + cookie so passkey login is a real login."""
     token = jwt.encode({"_uid": user._uid}, current_app.config["SECRET_KEY"], algorithm="HS256")
-    resp = jsonify({"message": message, "uid": user._uid})
+    # token also in the body so cookie-blocked clients (installed iOS PWAs) can
+    # send it as an Authorization: Bearer header. Cookie stays primary.
+    resp = jsonify({"message": message, "uid": user._uid, "token": token})
     resp.set_cookie(
         current_app.config["JWT_TOKEN_NAME"], token,
         max_age=3600, secure=True, httponly=True, path='/', samesite='None',

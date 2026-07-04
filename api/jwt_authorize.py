@@ -32,7 +32,15 @@ def token_required(roles=None):
     def decorator(func_to_guard):
         @wraps(func_to_guard)
         def decorated(*args, **kwargs):
+            # Primary: the JWT cookie (unchanged — this is what the website uses).
             token = request.cookies.get(current_app.config["JWT_TOKEN_NAME"])
+            # Fallback: Authorization: Bearer <token>. Needed where cross-site
+            # cookies are blocked (e.g. an installed iOS PWA), so the app can
+            # stay authenticated the same way the website does.
+            if not token:
+                auth_header = request.headers.get("Authorization", "")
+                if auth_header.startswith("Bearer "):
+                    token = auth_header[7:].strip()
             if not token:
                 return {
                     "message": "Token is missing",
