@@ -12,15 +12,7 @@ This HTML is setup as a fragment allowing it to be "included" by other HTML file
             <div class="navbar-nav">
                 <!-- url_for is a Jinja2 pre-processor that finds route from function name (def) -->
                 <a class="nav-link" href={{ url_for('index') }} style="color: #ffffff;">Home</a>
-                <div class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="navbarDarkDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: #ffffff;">
-                      Data 
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="navbarDarkDropdownMenuLink">
-                        <li><a class="dropdown-item" href={{ url_for('utable') }}>User Management</a></li>
-                        <li><a class="dropdown-item" href={{ url_for('u2table') }}>User Management 2</a></li>
-                    </ul>
-                </div>
+                <a class="nav-link" href="{{ url_for('utable') }}" style="color: #ffffff;">User Management</a>
                 <div class="dropdown px-3">
                     <a class="nav-link dropdown-toggle" href="#" role="button" id="githubDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="color: #ffffff;">
                         Github

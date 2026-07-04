@@ -180,15 +180,30 @@ def index():
 @ip_allowlist()
 def utable():
     users = User.query.all()
-    return render_template("utable.html", user_data=users)
+    # Build a plan/tier map so the unified UI can show each user's plan without
+    # extra queries in the template. Admins are shown as 'admin'.
+    tiers = {}
+    for u in users:
+        try:
+            sub = Subscription.query.filter_by(_user_id=u.id).first()
+        except Exception:
+            sub = None
+        if getattr(u, 'role', 'User') == 'Admin':
+            tiers[u.id] = 'admin'
+        elif sub and getattr(sub, 'status', None) == 'active':
+            tiers[u.id] = sub.tier or 'free'
+        else:
+            tiers[u.id] = 'free'
+    return render_template("utable.html", user_data=users, tiers=tiers)
 
 @app.route('/users/table2')
 @login_required
 @admin_required
 @ip_allowlist()
 def u2table():
-    users = User.query.all()
-    return render_template("u2table.html", user_data=users)
+    # Consolidated into a single management console; keep the route working by
+    # redirecting so old links/bookmarks don't break.
+    return redirect(url_for('utable'))
 
 # Helper function to extract uploads for a user
 @app.route('/uploads/<path:filename>')
@@ -222,6 +237,70 @@ def reset_password(user_id):
         return jsonify({'message': 'Password reset successfully'}), 200
     audit("password_reset_failed", target_user_id=user_id)
     return jsonify({'error': 'Password reset failed'}), 500
+
+@app.route('/users/set_role/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+@ip_allowlist()
+def set_user_role(user_id):
+    """Promote/demote a user between 'Admin' and 'User' (admin only)."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    data = request.get_json(silent=True) or {}
+    role = (data.get('role') or '').strip()
+    if role not in ('Admin', 'User'):
+        return jsonify({'error': 'Invalid role. Must be "Admin" or "User".'}), 400
+    # Guard: don't let an admin remove their own admin (avoid self lock-out).
+    if user.id == current_user.id and role != 'Admin':
+        return jsonify({'error': "You can't remove your own admin role."}), 400
+    try:
+        user.role = role
+        db.session.commit()
+        audit("role_changed", target_user_id=user_id, new_role=role)
+        return jsonify({'message': f'Role updated to {role}', 'role': role}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/users/set_tier/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+@ip_allowlist()
+def set_user_tier(user_id):
+    """Set a user's subscription plan/tier (admin only). Mirrors the API's
+    admin set-tier logic so behavior is identical to the app dashboard."""
+    from datetime import datetime, timedelta
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    data = request.get_json(silent=True) or {}
+    tier = (data.get('tier') or 'free').strip()
+    billing_interval = data.get('billing_interval', 'monthly')
+    if tier not in ('free', 'plus', 'pro'):
+        return jsonify({'error': 'Invalid tier. Must be "free", "plus", or "pro".'}), 400
+    days = 30 if billing_interval == 'monthly' else 365
+    try:
+        subscription = Subscription.query.filter_by(_user_id=user_id).first()
+        if not subscription:
+            subscription = Subscription(
+                user_id=user_id,
+                tier=tier,
+                status='active',
+                billing_interval=billing_interval if tier != 'free' else None,
+            )
+            db.session.add(subscription)
+        else:
+            subscription.tier = tier
+            subscription.status = 'active'
+            subscription.billing_interval = billing_interval if tier != 'free' else None
+        subscription.expires_at = (datetime.utcnow() + timedelta(days=days)) if tier != 'free' else None
+        db.session.commit()
+        audit("tier_changed", target_user_id=user_id, new_tier=tier)
+        return jsonify({'message': f'Plan updated to {tier}', 'tier': tier}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # Create an AppGroup for custom commands
 custom_cli = AppGroup('custom', help='Custom commands')

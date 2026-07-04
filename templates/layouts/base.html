@@ -38,13 +38,42 @@ This HTML is setup as as a Jinja2 layout, coders use layouts for:
             position: static;
             z-index: 9999;
         }
+        /* Dark, premium animated "aurora" background — replaces the old blue
+           Vanta waves. Baked into the layout so every page (even ones that
+           override the background block) stays dark and the light UI reads. */
+        html, body { background: #070f1c; }
+        body { color: #e8f1fb; }
         #body_background {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
+            position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1;
+            overflow: hidden; background: #070f1c;
+        }
+        #body_background::before, #body_background::after {
+            content: ''; position: absolute; inset: -30%;
+            background-repeat: no-repeat; filter: blur(72px); will-change: transform;
+        }
+        #body_background::before {
+            background:
+              radial-gradient(closest-side, rgba(18,176,204,.34), transparent 70%) 12% 18% / 46% 46%,
+              radial-gradient(closest-side, rgba(10,124,194,.32), transparent 70%) 82% 8%  / 42% 42%,
+              radial-gradient(closest-side, rgba(124,77,255,.22), transparent 70%) 78% 88% / 40% 40%;
+            animation: mcAurora1 26s ease-in-out infinite alternate;
+        }
+        #body_background::after {
+            background:
+              radial-gradient(closest-side, rgba(16,185,129,.18), transparent 70%) 20% 88% / 40% 40%,
+              radial-gradient(closest-side, rgba(18,176,204,.20), transparent 70%) 60% 42% / 44% 44%;
+            animation: mcAurora2 34s ease-in-out infinite alternate;
+        }
+        @keyframes mcAurora1 {
+            0%   { transform: translate3d(-2%,-1%,0) scale(1); }
+            100% { transform: translate3d(3%,2%,0) scale(1.12); }
+        }
+        @keyframes mcAurora2 {
+            0%   { transform: translate3d(2%,1%,0) scale(1.05); }
+            100% { transform: translate3d(-3%,-2%,0) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #body_background::before, #body_background::after { animation: none; }
         }
     </style>
     {% block style %}
@@ -65,26 +94,8 @@ This HTML is setup as as a Jinja2 layout, coders use layouts for:
 </body>
 
 {% block background %}
-    <script src="{{ url_for('static', filename='js/three.r119.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/vanta.waves.min.js') }}"></script>
-    <script>
-        VANTA.WAVES({
-            el: "#body_background",
-            mouseControls: true,
-            touchControls: true,
-            gyroControls: false,
-            minHeight: 200.00,
-            minWidth: 200.00,
-            scale: 1.00,
-            scaleMobile: 1.00,
-            color: 0xf87ac,
-            shininess: 0.00,
-            waveHeight: 40.00,
-            waveSpeed: 0.50,
-            zoom: 0.65
-          })
-          </script>
-    </script>
+    <!-- Animated background is now pure CSS (#body_background aurora above) —
+         no Vanta/three.js dependency, so it can never fail to load. -->
 {% endblock %}
 
 </html>

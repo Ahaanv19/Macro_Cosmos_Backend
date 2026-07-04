@@ -1,55 +1,169 @@
 {% extends "layouts/base.html" %}
 {% set project = "Home" %}
 
+{% block style %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --mc-ocean: #0a7cc2;
+    --mc-ocean-2: #12b0cc;
+    --mc-ink: #0b1524;
+    --mc-glass: rgba(13, 24, 42, 0.55);
+    --mc-glass-border: rgba(148, 197, 236, 0.18);
+    --mc-text: #e8f1fb;
+    --mc-muted: #9fb6cf;
+  }
+  body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .mc-wrap { max-width: 1180px; margin: 0 auto; padding: 3.2rem 1.25rem 4rem; }
+
+  .mc-hero { text-align: center; margin-bottom: 2.6rem; }
+  .mc-status {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .4rem .9rem; border-radius: 999px; font-size: .78rem; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase;
+    color: #b8f5d0; background: rgba(16, 185, 129, .12);
+    border: 1px solid rgba(16, 185, 129, .35); backdrop-filter: blur(8px);
+  }
+  .mc-status .dot { width: .55rem; height: .55rem; border-radius: 999px; background: #22c55e;
+    box-shadow: 0 0 0 0 rgba(34,197,94,.6); animation: mcpulse 2.4s infinite; }
+  @keyframes mcpulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)} 70%{box-shadow:0 0 0 .6rem rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
+
+  .mc-title {
+    font-family: 'Fraunces', Georgia, serif; font-weight: 700;
+    font-size: clamp(2.6rem, 6vw, 4.6rem); line-height: 1.02; margin: 1.1rem 0 .5rem;
+    background: linear-gradient(120deg, #ffffff 0%, #bfe6ff 40%, var(--mc-ocean-2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    letter-spacing: -.02em;
+  }
+  .mc-sub { color: var(--mc-muted); font-size: 1.08rem; max-width: 44rem; margin: 0 auto; line-height: 1.6; }
+
+  .mc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 2.4rem 0; }
+  .mc-stat {
+    padding: 1.15rem 1.25rem; border-radius: 18px; background: var(--mc-glass);
+    border: 1px solid var(--mc-glass-border); backdrop-filter: blur(14px);
+    box-shadow: 0 24px 50px -34px rgba(0,0,0,.7);
+  }
+  .mc-stat .k { font-size: 1.6rem; font-weight: 800; color: #fff; letter-spacing: -.02em; }
+  .mc-stat .l { color: var(--mc-muted); font-size: .8rem; margin-top: .15rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .mc-stat .k small { font-size: .9rem; color: var(--mc-ocean-2); font-weight: 700; }
+
+  .mc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.15rem; }
+  .mc-card {
+    position: relative; overflow: hidden; padding: 1.6rem; border-radius: 22px;
+    background: var(--mc-glass); border: 1px solid var(--mc-glass-border);
+    backdrop-filter: blur(16px); box-shadow: 0 30px 60px -40px rgba(0,0,0,.75);
+    transition: transform .28s cubic-bezier(.22,1,.36,1), border-color .28s, box-shadow .28s;
+  }
+  .mc-card::before { content:''; position:absolute; inset:0 0 auto; height:3px;
+    background: linear-gradient(90deg, var(--mc-ocean), var(--mc-ocean-2)); opacity:.85; }
+  .mc-card:hover { transform: translateY(-6px); border-color: rgba(18,176,204,.45);
+    box-shadow: 0 40px 70px -38px rgba(10,124,194,.55); }
+  .mc-ico {
+    width: 46px; height: 46px; border-radius: 13px; display:flex; align-items:center; justify-content:center;
+    font-size: 1.25rem; color:#fff; margin-bottom: 1rem;
+    background: linear-gradient(135deg, var(--mc-ocean), var(--mc-ocean-2));
+    box-shadow: 0 12px 24px -12px rgba(10,124,194,.8);
+  }
+  .mc-card h3 { color:#fff; font-size: 1.12rem; font-weight: 700; margin: 0 0 .55rem; }
+  .mc-card p, .mc-card li { color: var(--mc-muted); font-size: .92rem; line-height: 1.6; }
+  .mc-card ul { padding-left: 1.1rem; margin: 0; }
+  .mc-card li { margin-bottom: .3rem; }
+
+  .mc-section-label { color: var(--mc-ocean-2); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .12em; font-size: .78rem; margin: 2.6rem 0 1rem; }
+
+  .mc-pills { display:flex; flex-wrap:wrap; gap:.55rem; }
+  .mc-pill { padding:.5rem .9rem; border-radius: 999px; font-size:.82rem; font-weight:600;
+    color: var(--mc-text); background: rgba(255,255,255,.06); border:1px solid var(--mc-glass-border); }
+
+  .mc-btn {
+    display:inline-flex; align-items:center; gap:.5rem; padding:.7rem 1.2rem; border-radius: 13px;
+    font-weight: 700; font-size:.92rem; text-decoration:none; transition: transform .2s, box-shadow .2s;
+  }
+  .mc-btn-primary { color:#fff; background: linear-gradient(135deg, var(--mc-ocean), var(--mc-ocean-2));
+    box-shadow: 0 14px 30px -14px rgba(10,124,194,.85); }
+  .mc-btn-ghost { color: var(--mc-text); background: rgba(255,255,255,.06); border:1px solid var(--mc-glass-border); }
+  .mc-btn:hover { transform: translateY(-2px); }
+
+  .mc-team { display:flex; gap:.8rem; flex-wrap:wrap; }
+  .mc-member { display:flex; align-items:center; gap:.7rem; padding:.7rem 1rem; border-radius: 14px;
+    background: rgba(255,255,255,.05); border:1px solid var(--mc-glass-border); }
+  .mc-avatar { width:38px; height:38px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+    font-weight:800; color:#fff; background: linear-gradient(135deg, var(--mc-ocean), var(--mc-ocean-2)); }
+  .mc-member .n { color:#fff; font-weight:700; font-size:.95rem; }
+  .mc-member .r { color: var(--mc-muted); font-size:.78rem; }
+
+  @media (max-width: 900px) { .mc-stats { grid-template-columns: repeat(2,1fr); } .mc-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { .mc-stats { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
 {% block body %}
-    <!-- Start of body content specific to page -->
-    <div class="px-5 py-5 mx-auto">
-        <h1 class="text-center" style="font-family: 'Georgia', serif; color: white;"><strong>Macro Cosmos Backend</strong></h1>
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card shadow-lg" style="background-color:rgb(41, 40, 39); color: white; border-radius: 15px;">
-                    <div class="card-body">
-                    <h5 class="card-title">Purpose</h5>
-                    <ul>
-                        <li>Real-time mapping with high accuracy and detail:</li>
-                        <li>AI-driven traffic analysis for up-to-date congestion detection</li>
-                        <li>Predictive routing to optimize travel times across San Diego</li>
-                        <li>Visual route display with interactive maps and travel mode selection</li>
-                        <li>Integration of real-world traffic simulation for testing and refinement</li>
-                    </ul>
-                    <a href="https://ahaanv19.github.io/Macro_Cosmos_Frontend/" class="btn btn-light">Visit Website</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card shadow-lg" style="background-color:rgb(36, 36, 36); color: white; border-radius: 15px;">
-                    <div class="card-body">
-                    <h5 class="card-title">Development Process</h5>
-                    <ul>
-                        <li>Plan</li>
-                        <li>Design</li>
-                        <li>Develop</li>
-                        <li>Test</li>
-                        <li>Deploy</li>
-                    </ul>
-                    <img class="card-img-bottom" src="{{ url_for('static', filename= 'assets/development.webp') }}" alt= 'Put image here' style="width: 150px; height: 150px; object-fit: cover; border-radius: 10px;">
-                    <a href="#" class="btn btn-light">Learn More</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card shadow-lg" style="background-color:rgb(45, 44, 44); color: white; border-radius: 15px;">
-                    <div class="card-body">
-                    <h5 class="card-title">Our Team</h5>
-                    <ul>
-                        <li>Ahaan</li>
-                        <li>Arnav</li>
-                        <li>Rudransh</li>
-                    </ul>
-                    <a href="https://ahaanv19.github.io/Macro_Cosmos_Frontend/" class="btn btn-light">Explore Features</a>
-                    </div>
-                </div>
-            </div>
-        </div>
+<div class="mc-wrap">
+
+  <div class="mc-hero">
+    <span class="mc-status"><span class="dot"></span> All systems operational</span>
+    <h1 class="mc-title">Macro Cosmos</h1>
+    <p class="mc-sub">The control center powering smart routing and live traffic intelligence across
+      San Diego, San Francisco &amp; Alameda — real-time data, AI-assisted routing, and a secure API.</p>
+    <div style="margin-top:1.6rem; display:flex; gap:.7rem; justify-content:center; flex-wrap:wrap;">
+      <a href="https://macro-cosmos.netlify.app" class="mc-btn mc-btn-primary"><i class="fa fa-external-link"></i> Open the App</a>
+      <a href="{{ url_for('utable') }}" class="mc-btn mc-btn-ghost"><i class="fa fa-users"></i> User Management</a>
     </div>
+  </div>
+
+  <div class="mc-stats">
+    <div class="mc-stat"><div class="k">3</div><div class="l">Regions Covered</div></div>
+    <div class="mc-stat"><div class="k">Live<small> · 5 min</small></div><div class="l">Traffic Refresh</div></div>
+    <div class="mc-stat"><div class="k">REST</div><div class="l">Secure API</div></div>
+    <div class="mc-stat"><div class="k">99.9<small>%</small></div><div class="l">Uptime Target</div></div>
+  </div>
+
+  <div class="mc-grid">
+    <div class="mc-card">
+      <div class="mc-ico"><i class="fa fa-map-o"></i></div>
+      <h3>What it powers</h3>
+      <ul>
+        <li>Real-time mapping with high accuracy</li>
+        <li>AI-driven traffic &amp; congestion analysis</li>
+        <li>Predictive, traffic-aware routing</li>
+        <li>Interactive route display &amp; travel modes</li>
+        <li>Live incident &amp; hazard reporting</li>
+      </ul>
+    </div>
+    <div class="mc-card">
+      <div class="mc-ico"><i class="fa fa-cogs"></i></div>
+      <h3>Engineering</h3>
+      <p>Flask REST API with JWT + passkey auth, rate limiting, RBAC, and audit logging. Traffic engine blends
+         city open-data, county road networks, and live regional feeds.</p>
+      <div class="mc-pills" style="margin-top:.9rem;">
+        <span class="mc-pill">Flask</span><span class="mc-pill">SQLAlchemy</span>
+        <span class="mc-pill">JWT + Passkeys</span><span class="mc-pill">Stripe</span>
+        <span class="mc-pill">511 / MTC</span>
+      </div>
+    </div>
+    <div class="mc-card">
+      <div class="mc-ico"><i class="fa fa-shield"></i></div>
+      <h3>Operations</h3>
+      <p>Manage users, roles, and subscription plans from one console. Every admin action is audited.</p>
+      <div style="margin-top:1rem; display:flex; gap:.55rem; flex-wrap:wrap;">
+        <a href="{{ url_for('utable') }}" class="mc-btn mc-btn-primary" style="padding:.55rem 1rem;"><i class="fa fa-users-cog"></i> Manage Users</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="mc-section-label">The Team</div>
+  <div class="mc-team">
+    <div class="mc-member"><div class="mc-avatar">A</div><div><div class="n">Ahaan</div><div class="r">Lead / Backend &amp; AI</div></div></div>
+    <div class="mc-member"><div class="mc-avatar">R</div><div><div class="n">Rudransh</div><div class="r">Engineering</div></div></div>
+  </div>
+
+  <div class="mc-section-label">Repositories</div>
+  <div class="mc-pills">
+    <a href="https://github.com/Ahaanv19/Macro_Cosmos_Frontend" class="mc-pill" style="text-decoration:none;"><i class="fa fa-github"></i> Frontend</a>
+    <a href="https://github.com/Ahaanv19/Macro_Cosmos_Backend" class="mc-pill" style="text-decoration:none;"><i class="fa fa-github"></i> Backend</a>
+  </div>
+
+</div>
 {% endblock %}
