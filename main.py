@@ -464,11 +464,6 @@ with app.app_context():
     except Exception as e:
         print(f"user_backup_codes table init: {e}")
     try:
-        from model.pfp_store import UserProfilePicture
-        UserProfilePicture.__table__.create(db.engine, checkfirst=True)
-    except Exception as e:
-        print(f"user_profile_pictures table init: {e}")
-    try:
         from api.businesses import load_approved_into_memory
         load_approved_into_memory()
     except Exception as e:
