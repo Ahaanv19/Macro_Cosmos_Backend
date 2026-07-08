@@ -79,6 +79,9 @@ This HTML is setup as as a Jinja2 layout, coders use layouts for:
     {% block style %}
     {% endblock %}
 
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='assets/macro-cosmos-logo.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='assets/macro-cosmos-logo-full.png') }}">
+
     <title>{{ basename }} | {{ project }} </title>
 
 </head>
